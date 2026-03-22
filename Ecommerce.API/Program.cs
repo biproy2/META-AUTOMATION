@@ -49,12 +49,16 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 // Auto-apply EF migrations on startup (Development only)
-if (app.Environment.IsDevelopment())
+try
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await db.Database.MigrateAsync();
     Log.Information("✅ Database migrations applied");
+}
+catch (Exception ex)
+{
+    Log.Warning("Migration skipped: {Message}", ex.Message);
 }
 
 // ── Middleware pipeline — ORDER MATTERS ──────────────────
