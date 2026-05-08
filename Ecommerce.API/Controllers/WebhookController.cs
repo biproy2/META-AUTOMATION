@@ -6,16 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Ecommerce.API.Controllers;
 
-/// <summary>
-/// Multi-tenant webhook endpoints.
-/// Each client gets their own webhook URL using their slug.
-///
-/// WhatsApp:  POST /api/webhook/{slug}/whatsapp
-/// Messenger: POST /api/webhook/{slug}/messenger
-/// Shopify:   POST /api/webhook/{slug}/shopify/order
-///
-/// The {slug} identifies WHICH client the message belongs to.
-/// </summary>
 [ApiController]
 [Route("api/webhook")]
 public class WebhookController(
@@ -47,11 +37,9 @@ public class WebhookController(
         var tenant = await tenantRepo.GetBySlugAsync(slug, ct);
         if (tenant == null) return NotFound();
 
-        _ = Task.Run(async () =>
+        try
         {
-            try
-            {
-                foreach (var entry in payload.Entry)
+            foreach (var entry in payload.Entry)
                 foreach (var change in entry.Changes)
                 {
                     if (change.Value.Messages == null) continue;
@@ -69,9 +57,8 @@ public class WebhookController(
                         }, ct);
                     }
                 }
-            }
-            catch (Exception ex) { Console.WriteLine($"[WA Webhook Error] {slug}: {ex.Message}"); }
-        }, ct);
+        }
+        catch (Exception ex) { Console.WriteLine($"[WA Webhook Error] {slug}: {ex.Message}"); }
 
         return Ok();
     }
@@ -101,11 +88,9 @@ public class WebhookController(
         var tenant = await tenantRepo.GetBySlugAsync(slug, ct);
         if (tenant == null) return NotFound();
 
-        _ = Task.Run(async () =>
+        try
         {
-            try
-            {
-                foreach (var entry in payload.Entry)
+            foreach (var entry in payload.Entry)
                 foreach (var evt in entry.Messaging)
                 {
                     var text = evt.Message?.Text ?? evt.Postback?.Payload;
@@ -120,9 +105,8 @@ public class WebhookController(
                         ChannelUserId = evt.Sender.Id
                     }, ct);
                 }
-            }
-            catch (Exception ex) { Console.WriteLine($"[MS Webhook Error] {slug}: {ex.Message}"); }
-        }, ct);
+        }
+        catch (Exception ex) { Console.WriteLine($"[MS Webhook Error] {slug}: {ex.Message}"); }
 
         return Ok();
     }
@@ -135,33 +119,30 @@ public class WebhookController(
         var tenant = await tenantRepo.GetBySlugAsync(slug, ct);
         if (tenant == null) return NotFound();
 
-        _ = Task.Run(async () =>
+        try
         {
-            try
+            var customerName = payload.Customer != null
+                ? $"{payload.Customer.FirstName} {payload.Customer.LastName}".Trim()
+                : payload.ShippingAddress?.Name ?? "Shopify Customer";
+
+            var customerPhone = payload.Customer?.Phone
+                ?? payload.ShippingAddress?.Phone ?? "N/A";
+
+            await orderService.CreateOrderAsync(tenant.Id, new CreateOrderDto
             {
-                var customerName = payload.Customer != null
-                    ? $"{payload.Customer.FirstName} {payload.Customer.LastName}".Trim()
-                    : payload.ShippingAddress?.Name ?? "Shopify Customer";
-
-                var customerPhone = payload.Customer?.Phone
-                    ?? payload.ShippingAddress?.Phone ?? "N/A";
-
-                await orderService.CreateOrderAsync(tenant.Id, new CreateOrderDto
-                {
-                    CustomerName = customerName,
-                    CustomerPhone = customerPhone,
-                    DeliveryAddress = payload.ShippingAddress?.Address1 ?? string.Empty,
-                    City = payload.ShippingAddress?.City ?? string.Empty,
-                    ProductName = payload.LineItems.FirstOrDefault()?.Title ?? "Shopify Product",
-                    Quantity = payload.LineItems.FirstOrDefault()?.Quantity ?? 1,
-                    UnitPrice = decimal.TryParse(payload.LineItems.FirstOrDefault()?.Price, out var p) ? p : 0,
-                    DeliveryCharge = 0,
-                    OrderSource = MessageChannel.Direct,
-                    Notes = $"Shopify #{payload.OrderNumber}"
-                }, ct);
-            }
-            catch (Exception ex) { Console.WriteLine($"[Shopify Webhook Error] {slug}: {ex.Message}"); }
-        }, ct);
+                CustomerName = customerName,
+                CustomerPhone = customerPhone,
+                DeliveryAddress = payload.ShippingAddress?.Address1 ?? string.Empty,
+                City = payload.ShippingAddress?.City ?? string.Empty,
+                ProductName = payload.LineItems.FirstOrDefault()?.Title ?? "Shopify Product",
+                Quantity = payload.LineItems.FirstOrDefault()?.Quantity ?? 1,
+                UnitPrice = decimal.TryParse(payload.LineItems.FirstOrDefault()?.Price, out var p) ? p : 0,
+                DeliveryCharge = 0,
+                OrderSource = MessageChannel.Direct,
+                Notes = $"Shopify #{payload.OrderNumber}"
+            }, ct);
+        }
+        catch (Exception ex) { Console.WriteLine($"[Shopify Webhook Error] {slug}: {ex.Message}"); }
 
         return Ok();
     }
