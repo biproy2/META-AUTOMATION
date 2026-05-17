@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 🔧 Services
 builder.Services.AddDatabase(builder.Configuration);
 builder.Services.AddApplicationServices();
 builder.Services.AddExternalApiClients();
@@ -17,57 +16,42 @@ builder.Services.AddControllers()
     {
         opt.JsonSerializerOptions.PropertyNamingPolicy =
             System.Text.Json.JsonNamingPolicy.CamelCase;
-
         opt.JsonSerializerOptions.Converters.Add(
             new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 
 builder.Services.AddEndpointsApiExplorer();
-
 builder.Services.AddCors(opt =>
-    opt.AddPolicy("AllowAll", p =>
-        p.AllowAnyOrigin()
-         .AllowAnyMethod()
-         .AllowAnyHeader()));
+    opt.AddPolicy("AllowAll", p => p
+        .AllowAnyOrigin()
+        .AllowAnyMethod()
+        .AllowAnyHeader()));
 
 var app = builder.Build();
 
-
-// 🔥 Auto migration
+// Auto migrate on startup
 try
 {
     using var scope = app.Services.CreateScope();
-
-    var db = scope.ServiceProvider
-        .GetRequiredService<ApplicationDbContext>();
-
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await db.Database.MigrateAsync();
 }
 catch (Exception ex)
 {
-    Console.WriteLine("Migration failed: " + ex.Message);
+    Console.WriteLine($"Migration error: {ex.Message}");
 }
 
-
-// 🧩 Middlewares
 app.UseMiddleware<ExceptionMiddleware>();
-
 app.UseSwagger();
-
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json",
-        "Ecommerce Automation API v1");
-
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Ecommerce Automation API v1");
     c.RoutePrefix = "swagger";
 });
 
 app.UseCors("AllowAll");
-
 app.UseAuthentication();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
 await app.RunAsync();
