@@ -34,11 +34,12 @@ try
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await db.Database.MigrateAsync();
+    // Tables already created manually - skip migration
+    await db.Database.EnsureCreatedAsync();
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"Migration error: {ex.Message}");
+    Console.WriteLine($"DB check: {ex.Message}");
 }
 
 app.UseMiddleware<ExceptionMiddleware>();
